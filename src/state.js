@@ -71,6 +71,10 @@ function useAppState() {
     if (typeof window !== 'undefined') window.scrollTo(0, 0);
   }, [patch]);
 
+  // Shared data only: bout list/results, lock/settle state, and the leaderboard.
+  // Deliberately never touches `picks` here — this device is the sole writer of
+  // its own picks (see setPick), so re-fetching them on a timer would just race
+  // against an in-flight upsertPick() and stomp the player's own fresh selection.
   const refreshLiveData = React.useCallback(async () => {
     try {
       const live = await window.CageClashSupabase.fetchLiveEvent();
@@ -82,28 +86,32 @@ function useAppState() {
         CARD_TIMES.prelims = new Date(startMs + 2 * 3600e3).toISOString();
         CARD_TIMES.main = new Date(startMs + 4 * 3600e3).toISOString();
       }
-      let picksPatch = {};
-      const pid = stateRef.current.playerId;
-      if (pid && stateRef.current.name) {
-        const rows = await window.CageClashSupabase.fetchMyPicks(pid, BOUTS.map(b => b.id));
-        const picks = {};
-        rows.forEach(r => { picks[r.bout_id] = { winner: r.winner, method: r.method, round: r.round, bonus: r.bonus }; });
-        picksPatch = { picks };
-      }
       const leaderboard = await computeLeaderboard();
       patch(s => {
         const justSettled = live.event.settled && s.liveEventId === live.event.id && s.packsAwardedForEventId !== live.event.id;
         const hits = BOUTS.filter(b => scoreBout(b.id, (s.picks || {})[b.id]).hit).length;
         const packsGain = justSettled ? (tierFor(hits, BOUTS.length) ? 2 : 1) : 0;
-        return Object.assign({}, picksPatch, {
+        return {
           liveEventId: live.event.id, liveEventName: live.event.name, liveEventVenue: live.event.venue,
           liveEventStartsAtMs: startMs, locked: live.event.locked, settled: live.event.settled,
           fightId: s.fightId || (BOUTS[0] && BOUTS[0].id),
           packs: (s.packs || 0) + packsGain,
           packsAwardedForEventId: justSettled ? live.event.id : s.packsAwardedForEventId,
-          leaderboard, dataVersion: (s.dataVersion || 0) + 1
-        });
+          leaderboard
+        };
       }, { save: true });
+    } catch (e) { /* offline or Supabase unreachable — keep last known state */ }
+  }, [patch]);
+
+  // One-time load of this device's own picks — not repeated on the poll (see above).
+  const loadMyPicks = React.useCallback(async () => {
+    const pid = stateRef.current.playerId;
+    if (!pid || !stateRef.current.name) return;
+    try {
+      const rows = await window.CageClashSupabase.fetchMyPicks(pid, BOUTS.map(b => b.id));
+      const picks = {};
+      rows.forEach(r => { picks[r.bout_id] = { winner: r.winner, method: r.method, round: r.round, bonus: r.bonus }; });
+      patch(s => ({ picks: { ...picks, ...s.picks } }), { save: true });
     } catch (e) { /* offline or Supabase unreachable — keep last known state */ }
   }, [patch]);
 
@@ -114,7 +122,7 @@ function useAppState() {
     if (saved && saved.name) p = { ...p, ...saved };
     patch(p);
 
-    refreshLiveData();
+    refreshLiveData().then(loadMyPicks);
     const dataTimer = setInterval(refreshLiveData, 12000);
     const timer = setInterval(() => {
       patch(s => ({
@@ -342,6 +350,7 @@ function useAppState() {
     Object.keys(I18N.en).forEach(k => { if (typeof I18N.en[k] === 'string') L['t_' + k] = T(k); });
 
     return Object.assign(L, {
+      t_h_bouts_note: F('h_bouts_note', { n: BOUTS.length }),
       route: st.route,
       isWelcome: st.route === 'welcome',
       isApp: st.route !== 'welcome',
