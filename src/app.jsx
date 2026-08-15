@@ -168,17 +168,19 @@ function HomeScreen(v) {
         </div>
       </div>
 
-      <div style={css(`margin-top:26px`)}><SectionHeading label={v.t_standings} right={v.t_members} /></div>
+      <div style={css(`margin-top:26px`)}><SectionHeading label={v.t_standings} right={v.memberCount} /></div>
       <StandingsList rows={v.standings} />
 
-      <div onClick={v.goRecap} style={css(`cursor:pointer;margin-top:14px;background:#1c1c1e;border-radius:14px;padding:16px;display:flex;align-items:center;gap:10px`)}>
-        <div style={css(`flex:1;min-width:0`)}>
-          <div style={css(`font:600 12px/1 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:rgba(235,235,245,.45);margin-bottom:8px`)}>{v.lastSettledEvent}</div>
-          <div style={css(`font:400 22px/1 'Anton',sans-serif;text-transform:uppercase`)}>{v.lastSettledScore}</div>
-          <div style={css(`margin-top:8px;font:400 14px/1.4 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;color:rgba(235,235,245,.55)`)}>{v.lastSettledNote}</div>
+      {v.hasLastSettled && (
+        <div onClick={v.goRecap} style={css(`cursor:pointer;margin-top:14px;background:#1c1c1e;border-radius:14px;padding:16px;display:flex;align-items:center;gap:10px`)}>
+          <div style={css(`flex:1;min-width:0`)}>
+            <div style={css(`font:600 12px/1 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:rgba(235,235,245,.45);margin-bottom:8px`)}>{v.lastSettledEvent}</div>
+            <div style={css(`font:400 22px/1 'Anton',sans-serif;text-transform:uppercase`)}>{v.lastSettledScore}</div>
+            <div style={css(`margin-top:8px;font:400 14px/1.4 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;color:rgba(235,235,245,.55)`)}>{v.lastSettledNote}</div>
+          </div>
+          <span style={css(`flex:none;font:400 22px/1 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;color:rgba(235,235,245,.3)`)}>›</span>
         </div>
-        <span style={css(`flex:none;font:400 22px/1 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;color:rgba(235,235,245,.3)`)}>›</span>
-      </div>
+      )}
 
       <div style={css(`margin-top:14px;background:#1c1c1e;border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px`)}>
         <div>
