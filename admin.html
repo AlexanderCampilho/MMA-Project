@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cage Clash · Admin</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0a0a0b;color:#fff;font-family:-apple-system,'SF Pro Text',Helvetica,sans-serif;padding:16px 16px 60px;max-width:760px;margin-left:auto;margin-right:auto}
+  h1{font-size:22px;margin:8px 0 4px}
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#e8a33d;margin:28px 0 10px}
+  .sub{color:rgba(235,235,245,.5);font-size:13px;margin-bottom:18px}
+  .card{background:#1c1c1e;border-radius:12px;padding:14px 16px;margin-bottom:10px}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(235,235,245,.45);margin-bottom:4px}
+  input,select{width:100%;background:#2c2c2e;border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:9px 10px;font-size:14px;margin-bottom:10px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+  button{cursor:pointer;border:none;border-radius:9px;padding:10px 16px;font:600 13px/1 -apple-system,Helvetica,sans-serif;background:#2c2c2e;color:#fff}
+  button.primary{background:#e8a33d;color:#111}
+  button.danger{background:rgba(255,107,94,.15);color:#ff6b5e}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .pill{display:inline-block;padding:4px 9px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
+  .pill.on{background:rgba(232,163,61,.18);color:#e8a33d}
+  .pill.off{background:rgba(255,255,255,.08);color:rgba(255,255,255,.5)}
+  #gate{max-width:320px;margin:80px auto;text-align:center}
+  #gate input{text-align:center;font-size:18px;letter-spacing:.1em}
+  .err{color:#ff6b5e;font-size:13px;margin-top:6px}
+  .muted{color:rgba(235,235,245,.4);font-size:12px}
+  .bout-num{font:400 22px/1 'Arial Black',sans-serif;color:rgba(255,255,255,.25);width:28px;flex:none}
+  .bout-row{display:flex;gap:12px;align-items:flex-start}
+  .bout-fields{flex:1;min-width:0}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>Cage Clash Admin</h1>
+  <p class="sub">Enter the admin passphrase.</p>
+  <input id="pin" type="password" placeholder="Passphrase" autocomplete="off">
+  <button class="primary" style="width:100%" onclick="checkPin()">Enter</button>
+  <div id="pinErr" class="err"></div>
+</div>
+
+<div id="app" style="display:none">
+  <h1>Cage Clash Admin</h1>
+  <p class="sub" id="playerCount">—</p>
+
+  <h2>Live event</h2>
+  <div id="eventCard" class="card"></div>
+
+  <h2>Bouts</h2>
+  <div id="bouts"></div>
+  <div class="toolbar">
+    <button onclick="addBoutRow()">+ Add bout</button>
+  </div>
+
+  <h2>Start a new event</h2>
+  <div class="card">
+    <label>Name</label>
+    <input id="newName" placeholder="UFC 331 · Van vs. Pantoja 2">
+    <label>Venue</label>
+    <input id="newVenue" placeholder="Crypto.com Arena, Los Angeles">
+    <label>Picks lock at (local time)</label>
+    <input id="newStarts" type="datetime-local">
+    <button class="primary" onclick="createNewEvent()">Create &amp; make live</button>
+    <div class="muted" style="margin-top:8px">This replaces the current live card — testers immediately see the new (empty) bout list.</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin></script>
+<script src="src/admin-data.js"></script>
+<script>
+  var ADMIN_PIN = 'cage2026';
+  var METHODS = ['KO / TKO', 'Submission', 'Decision', 'Skip'];
+  var BONUSES = ['A takedown lands', 'A knockdown lands', 'Skip'];
+  var SLOTS = ['Early prelims', 'Prelims', 'Main card', 'Main card · co-main', 'Main card · main event'];
+  var state = { event: null, bouts: [] };
+
+  function checkPin() {
+    var v = document.getElementById('pin').value.trim().toLowerCase();
+    if (v === ADMIN_PIN) {
+      sessionStorage.setItem('cage-clash-admin-ok', '1');
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      boot();
+    } else {
+      document.getElementById('pinErr').textContent = 'Wrong passphrase.';
+    }
+  }
+  if (sessionStorage.getItem('cage-clash-admin-ok') === '1') {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    boot();
+  }
+
+  function boot() { load(); CageClashAdmin.getPlayerCount().then(function (n) { document.getElementById('playerCount').textContent = n + ' player' + (n === 1 ? '' : 's') + ' signed up'; }); }
+
+  function load() {
+    CageClashAdmin.getLiveEvent().then(function (live) {
+      state.event = live ? live.event : null;
+      state.bouts = live ? live.bouts : [];
+      render();
+    });
+  }
+
+  function fmtLocal(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function render() {
+    var e = state.event;
+    var ec = document.getElementById('eventCard');
+    if (!e) {
+      ec.innerHTML = '<div class="muted">No live event yet — create one below.</div>';
+    } else {
+      ec.innerHTML =
+        '<label>Name</label><input id="evName" value="' + escAttr(e.name) + '">' +
+        '<label>Venue</label><input id="evVenue" value="' + escAttr(e.venue || '') + '">' +
+        '<label>Picks lock at (local time)</label><input id="evStarts" type="datetime-local" value="' + fmtLocal(e.starts_at) + '">' +
+        '<div class="toolbar">' +
+        '<button onclick="saveEventMeta()">Save details</button>' +
+        '<button class="' + (e.locked ? 'primary' : '') + '" onclick="toggleLock()">' + (e.locked ? 'Unlock picks' : 'Lock picks') + '</button>' +
+        '<button class="' + (e.settled ? 'primary' : '') + '" onclick="toggleSettle()">' + (e.settled ? 'Un-settle' : 'Settle card') + '</button>' +
+        '</div>' +
+        '<div class="toolbar">' +
+        '<span class="pill ' + (e.locked ? 'on' : 'off') + '">' + (e.locked ? 'Picks locked' : 'Picks open') + '</span>' +
+        '<span class="pill ' + (e.settled ? 'on' : 'off') + '">' + (e.settled ? 'Settled' : 'Not settled') + '</span>' +
+        '</div>';
+    }
+
+    var b = document.getElementById('bouts');
+    if (!e) { b.innerHTML = ''; return; }
+    b.innerHTML = state.bouts.map(function (bout, i) {
+      return '<div class="card bout-row">' +
+        '<div class="bout-num">' + String(i + 1).padStart(2, '0') + '</div>' +
+        '<div class="bout-fields">' +
+        '<div class="row">' +
+        '<div><label>Fighter A</label><input value="' + escAttr(bout.fighter_a) + '" onchange="editBout(\'' + bout.id + '\',\'fighter_a\',this.value)"></div>' +
+        '<div><label>Fighter B</label><input value="' + escAttr(bout.fighter_b) + '" onchange="editBout(\'' + bout.id + '\',\'fighter_b\',this.value)"></div>' +
+        '</div>' +
+        '<div class="row3">' +
+        '<div><label>Slot</label>' + selectHtml(SLOTS, bout.slot, "editBout('" + bout.id + "','slot',this.value)") + '</div>' +
+        '<div><label>Division</label><input value="' + escAttr(bout.division) + '" onchange="editBout(\'' + bout.id + '\',\'division\',this.value)"></div>' +
+        '<div><label>Rounds</label><input type="number" value="' + bout.rounds + '" onchange="editBout(\'' + bout.id + '\',\'rounds\',parseInt(this.value||3))"></div>' +
+        '<div><label>Order</label><input type="number" value="' + bout.order_num + '" onchange="editBout(\'' + bout.id + '\',\'order_num\',parseInt(this.value||1))"></div>' +
+        '</div>' +
+        '<div class="row3">' +
+        '<div><label>Winner</label>' + selectHtml([['', '—'], ['a', bout.fighter_a || 'A'], ['b', bout.fighter_b || 'B']], bout.result_winner || '', "editBout('" + bout.id + "','result_winner',this.value||null)", true) + '</div>' +
+        '<div><label>Method</label>' + selectHtml([''].concat(METHODS), bout.result_method || '', "editBout('" + bout.id + "','result_method',this.value||null)") + '</div>' +
+        '<div><label>Round</label><input type="number" value="' + (bout.result_round || '') + '" onchange="editBout(\'' + bout.id + '\',\'result_round\',this.value?parseInt(this.value):null)"></div>' +
+        '<div><label>Bonus</label>' + selectHtml([''].concat(BONUSES), bout.result_bonus || '', "editBout('" + bout.id + "','result_bonus',this.value||null)") + '</div>' +
+        '</div>' +
+        '<div class="toolbar"><button class="danger" onclick="removeBout(\'' + bout.id + '\')">Delete bout</button></div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function selectHtml(options, current, onchange, isPairs) {
+    var opts = options.map(function (o) {
+      var val = isPairs ? o[0] : o, label = isPairs ? o[1] : (o || '—');
+      var sel = (val === current) ? ' selected' : '';
+      return '<option value="' + escAttr(val) + '"' + sel + '>' + esc(label) + '</option>';
+    }).join('');
+    return '<select onchange="' + onchange + '">' + opts + '</select>';
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+  function saveEventMeta() {
+    var name = document.getElementById('evName').value.trim();
+    var venue = document.getElementById('evVenue').value.trim();
+    var startsLocal = document.getElementById('evStarts').value;
+    var starts_at = startsLocal ? new Date(startsLocal).toISOString() : state.event.starts_at;
+    CageClashAdmin.updateEvent(state.event.id, { name: name, venue: venue, starts_at: starts_at }).then(load);
+  }
+  function toggleLock() { CageClashAdmin.updateEvent(state.event.id, { locked: !state.event.locked }).then(load); }
+  function toggleSettle() { CageClashAdmin.updateEvent(state.event.id, { settled: !state.event.settled }).then(load); }
+
+  function editBout(id, field, value) {
+    var patch = {}; patch[field] = value;
+    CageClashAdmin.updateBout(id, patch).then(function () {
+      var b = state.bouts.find(function (x) { return x.id === id; });
+      if (b) b[field] = value;
+    });
+  }
+  function removeBout(id) {
+    if (!confirm('Delete this bout? Any picks made on it are removed too.')) return;
+    CageClashAdmin.deleteBout(id).then(load);
+  }
+  function addBoutRow() {
+    if (!state.event) return;
+    var nextOrder = state.bouts.length ? Math.max.apply(null, state.bouts.map(function (b) { return b.order_num; })) + 1 : 1;
+    CageClashAdmin.addBout(state.event.id, {
+      order_num: nextOrder, slot: 'Prelims', division: 'Welterweight', rounds: 3,
+      fighter_a: 'Fighter A', fighter_b: 'Fighter B'
+    }).then(load);
+  }
+
+  function createNewEvent() {
+    var name = document.getElementById('newName').value.trim();
+    var venue = document.getElementById('newVenue').value.trim();
+    var startsLocal = document.getElementById('newStarts').value;
+    if (!name || !startsLocal) { alert('Name and lock time are required.'); return; }
+    CageClashAdmin.createEvent({ name: name, venue: venue, starts_at: new Date(startsLocal).toISOString() }).then(load);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cage Clash</title>
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Pick the fights, settle it on the leaderboard.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Cage Clash">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#000}
+  body{font-family:-apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;overscroll-behavior-y:none}
+  a{color:#e8a33d;text-decoration:none}
+  input{font-family:inherit}
+  #root{min-height:100vh;min-height:100dvh}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin></script>
+
+<script src="src/helpers.js"></script>
+<script src="src/data.js"></script>
+<script src="src/supabase-data.js"></script>
+<script src="src/state.js"></script>
+<script>
+  fetch('src/app.jsx')
+    .then(function (r) { return r.text(); })
+    .then(function (src) {
+      var out = Babel.transform(src, { filename: 'app.jsx', presets: ['react'] }).code;
+      (0, eval)(out);
+    })
+    .catch(function (err) {
+      document.getElementById('root').innerHTML =
+        '<pre style="color:#f66;padding:20px;white-space:pre-wrap;font-size:12px">' +
+        String((err && err.stack) || err).replace(/</g, '&lt;') + '</pre>';
+    });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>
