@@ -1,5 +1,6 @@
-// Minimal offline-first shell cache. Supabase/API calls always go to the network.
-const CACHE = 'cage-clash-v1';
+// Minimal shell cache. Network-first so live fixes/results show up immediately;
+// the cache only kicks in when offline. Supabase/API calls always go to the network.
+const CACHE = 'cage-clash-v2';
 const SHELL = [
   './',
   './index.html',
@@ -26,16 +27,14 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = event.request.url;
   if (url.indexOf('supabase.co') !== -1) return; // never cache live data
+  if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const network = fetch(event.request).then(res => {
-        if (res && res.ok && event.request.method === 'GET') {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(event.request, copy));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || network;
-    })
+    fetch(event.request).then(res => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(event.request, copy));
+      }
+      return res;
+    }).catch(() => caches.match(event.request))
   );
 });
