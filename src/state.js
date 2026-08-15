@@ -571,7 +571,12 @@ function useAppState() {
       goHome: () => go('home'), goCards: () => go('cards'),
       goMyPicks: () => go('mypicks'), goRecap: () => go('recap', { recapId: st.settled ? 'live' : 'fn284' }),
       copyLabel: st.copied ? T('copied') : T('copy_invite'),
-      copyInvite: () => { patch({ copied: true }); setTimeout(() => patch({ copied: false }), 1800); },
+      copyInvite: () => {
+        const url = window.location.origin + window.location.pathname;
+        copyTextToClipboard(url)
+          .then(() => { patch({ copied: true }); setTimeout(() => patch({ copied: false }), 1800); })
+          .catch(() => { window.prompt('Copy this link:', url); });
+      },
       refreshLabel: 'Refresh',
       refreshAction: () => { refreshLiveData(); }
     });
